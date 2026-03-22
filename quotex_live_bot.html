@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Quotex Live Signal Bot</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet"/>
+<style>
+:root {
+  --bg:     #030c18;
+  --card:   #071525;
+  --border: #0f2e50;
+  --accent: #00d4ff;
+  --call:   #00ff88;
+  --put:    #ff2255;
+  --neu:    #ffcc00;
+  --text:   #aed4f0;
+  --dim:    #2e5878;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:'Share Tech Mono',monospace;
+  min-height:100vh;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  padding:24px 16px;
+}
+body::before{
+  content:'';
+  position:fixed;inset:0;
+  background-image:
+    linear-gradient(rgba(0,212,255,0.03) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(0,212,255,0.03) 1px,transparent 1px);
+  background-size:36px 36px;
+  pointer-events:none;z-index:0;
+}
+.wrap{position:relative;z-index:1;width:100%;max-width:520px;}
+
+/* HEADER */
+.hdr{text-align:center;margin-bottom:30px;}
+.logo{
+  font-family:'Orbitron',monospace;
+  font-size:2rem;font-weight:900;
+  color:#fff;letter-spacing:6px;
+  text-shadow:0 0 28px rgba(0,212,255,0.6);
+}
+.logo span{color:var(--accent);}
+.sub{font-size:0.68rem;color:var(--dim);letter-spacing:3px;margin-top:5px;}
+.live-dot{
+  display:inline-block;
+  width:7px;height:7px;
+  background:var(--put);border-radius:50%;
+  margin-right:6px;vertical-align:middle;
+  transition:all .3s;
+}
+.live-dot.on{background:var(--call);box-shadow:0 0 7px var(--call);animation:blink 1.4s infinite;}
+@keyframes blink{0%,100%{opacity:1;}50%{opacity:.2;}}
+
+/* CARD */
+.card{
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:16px;padding:28px;
+  position:relative;overflow:hidden;
+  margin-bottom:16px;
+}
+.card::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,transparent,var(--accent),transparent);
+  opacity:.5;
+}
+
+/* SELECTS */
+.row2{display:flex;gap:12px;margin-bottom:16px;}
+.field{flex:1;}
+.lbl{display:block;font-size:.65rem;color:var(--dim);letter-spacing:2px;text-transform:uppercase;margin-bottom:6px;}
+select{
+  width:100%;background:#020b16;
+  border:1px solid var(--border);border-radius:8px;
+  color:#fff;font-family:'Share Tech Mono',monospace;
+  font-size:.88rem;padding:11px 12px;outline:none;
+  transition:border-color .2s,box-shadow .2s;
+}
+select:focus{border-color:var(--accent);box-shadow:0 0 12px rgba(0,212,255,.18);}
+select option{background:#030c18;}
+
+/* BUTTON */
+.btn{
+  width:100%;padding:15px;
+  background:linear-gradient(135deg,#003560,#006080);
+  border:2px solid var(--accent);border-radius:10px;
+  color:var(--accent);font-family:'Orbitron',monospace;
+  font-size:.92rem;font-weight:700;letter-spacing:2px;
+  cursor:pointer;transition:all .2s;
+}
+.btn:hover{background:linear-gradient(135deg,#004a88,#0080a8);box-shadow:0 0 22px rgba(0,212,255,.35);transform:translateY(-2px);}
+.btn:disabled{opacity:.5;cursor:not-allowed;transform:none;}
+
+/* PRICE STRIP */
+.pstrip{
+  display:none;
+  margin-top:16px;padding:12px 14px;
+  background:rgba(0,0,0,.4);
+  border:1px solid var(--border);border-radius:8px;
+  justify-content:space-between;align-items:center;
+}
+.ps-lbl{font-size:.62rem;color:var(--dim);letter-spacing:2px;}
+.ps-val{font-family:'Orbitron',monospace;font-size:1.3rem;font-weight:700;color:var(--accent);}
+.ps-chg{font-size:.8rem;}
+.up{color:var(--call);} .dn{color:var(--put);}
+
+/* STATES */
+.state{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:180px;text-align:center;}
+.idle-ring{width:65px;height:65px;border:2px solid var(--border);border-radius:50%;margin-bottom:16px;animation:pr 2s infinite;}
+@keyframes pr{0%{transform:scale(1);opacity:.6;}100%{transform:scale(1.65);opacity:0;}}
+.spin{width:42px;height:42px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:sp .75s linear infinite;}
+@keyframes sp{to{transform:rotate(360deg);}}
+
+/* SIGNAL BOX */
+.sig-box{
+  border-radius:12px;padding:26px 20px 20px;
+  text-align:center;margin-bottom:16px;
+  animation:pop .45s cubic-bezier(.175,.885,.32,1.275);
+}
+@keyframes pop{from{opacity:0;transform:scale(.82);}to{opacity:1;transform:scale(1);}}
+.sig-box.call{background:rgba(0,255,136,.07);border:2px solid var(--call);box-shadow:0 0 28px rgba(0,255,136,.3);}
+.sig-box.put {background:rgba(255,34,85,.07); border:2px solid var(--put); box-shadow:0 0 28px rgba(255,34,85,.3);}
+.sig-box.neu {background:rgba(255,204,0,.07); border:2px solid var(--neu); box-shadow:0 0 20px rgba(255,204,0,.2);}
+
+.arrow{font-size:3.8rem;line-height:1;margin-bottom:6px;animation:ad .5s ease;}
+@keyframes ad{from{transform:translateY(-16px);opacity:0;}to{transform:translateY(0);opacity:1;}}
+.sname{font-family:'Orbitron',monospace;font-size:2rem;font-weight:900;letter-spacing:5px;margin-bottom:5px;}
+.sig-box.call .sname{color:var(--call);text-shadow:0 0 18px rgba(0,255,136,.6);}
+.sig-box.put  .sname{color:var(--put); text-shadow:0 0 18px rgba(255,34,85,.6);}
+.sig-box.neu  .sname{color:var(--neu);}
+.sdesc{font-size:.72rem;letter-spacing:2px;margin-bottom:14px;}
+.sig-box.call .sdesc{color:rgba(0,255,136,.7);}
+.sig-box.put  .sdesc{color:rgba(255,34,85,.7);}
+.sig-box.neu  .sdesc{color:rgba(255,204,0,.7);}
+.cbar-wrap{background:rgba(255,255,255,.07);border-radius:4px;height:5px;overflow:hidden;margin:0 auto 6px;max-width:260px;}
+.cbar{height:100%;border-radius:4px;transition:width 1.3s ease;}
+.sig-box.call .cbar{background:var(--call);}
+.sig-box.put  .cbar{background:var(--put);}
+.sig-box.neu  .cbar{background:var(--neu);}
+.ctxt{font-size:.68rem;color:var(--dim);letter-spacing:1px;}
+
+/* INFO TABLE */
+.itbl{margin-bottom:14px;}
+.irow{display:flex;justify-content:space-between;padding:5px 0;font-size:.77rem;border-bottom:1px solid rgba(15,46,80,.5);}
+.ik{color:var(--dim);letter-spacing:1px;}
+.iv{color:#fff;font-weight:bold;}
+
+/* REASONS */
+.reasons{
+  padding:11px 13px;
+  background:rgba(0,0,0,.35);
+  border-left:3px solid var(--accent);
+  border-radius:5px;font-size:.75rem;
+  color:var(--text);line-height:1.9;
+  margin-bottom:16px;
+}
+
+/* TRADE BTNS */
+.tbrow{display:flex;gap:10px;}
+.tc,.tp{
+  flex:1;padding:13px;border-radius:8px;
+  font-family:'Orbitron',monospace;font-size:.8rem;
+  font-weight:700;letter-spacing:1px;cursor:pointer;transition:all .2s;
+}
+.tc{background:rgba(0,255,136,.12);border:2px solid var(--call);color:var(--call);}
+.tc:hover{background:rgba(0,255,136,.25);box-shadow:0 0 22px rgba(0,255,136,.3);transform:translateY(-2px);}
+.tp{background:rgba(255,34,85,.12);border:2px solid var(--put);color:var(--put);}
+.tp:hover{background:rgba(255,34,85,.25);box-shadow:0 0 22px rgba(255,34,85,.3);transform:translateY(-2px);}
+
+/* HISTORY */
+#histList{display:flex;flex-wrap:wrap;gap:8px;min-height:36px;margin-bottom:10px;}
+.hi{
+  padding:8px 12px;border-radius:7px;border-left:3px solid;
+  background:rgba(0,0,0,.35);font-size:.72rem;
+  animation:si .3s ease;min-width:140px;
+}
+@keyframes si{from{opacity:0;transform:translateY(-5px);}to{opacity:1;transform:translateY(0);}}
+.hi.call{border-color:var(--call);} .hi.put{border-color:var(--put);} .hi.neu{border-color:var(--neu);}
+.ha{color:#fff;font-size:.76rem;margin-bottom:2px;}
+.hs{font-weight:bold;letter-spacing:1px;}
+.hs.call{color:var(--call);} .hs.put{color:var(--put);} .hs.neu{color:var(--neu);}
+.ht{color:var(--dim);font-size:.66rem;margin-top:2px;}
+.no-h{font-size:.76rem;color:var(--dim);padding:8px 0;}
+.btn-clr{padding:6px 14px;background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--dim);font-family:'Share Tech Mono',monospace;font-size:.7rem;cursor:pointer;transition:all .2s;}
+.btn-clr:hover{border-color:var(--put);color:var(--put);}
+
+/* STATS */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
+.stat{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center;}
+.sn{display:block;font-family:'Orbitron',monospace;font-size:1.6rem;font-weight:700;color:var(--accent);margin-bottom:3px;}
+.sl{font-size:.64rem;color:var(--dim);letter-spacing:1px;text-transform:uppercase;}
+.cc{color:var(--call)!important;} .pc{color:var(--put)!important;} .nc{color:var(--neu)!important;}
+
+/* TOAST */
+.toast{
+  position:fixed;bottom:26px;right:26px;
+  padding:12px 20px;border-radius:8px;
+  font-family:'Orbitron',monospace;font-size:.78rem;letter-spacing:1px;
+  opacity:0;transform:translateY(14px);transition:all .3s;z-index:999;pointer-events:none;
+}
+.toast.show{opacity:1;transform:translateY(0);}
+.toast.call{background:rgba(0,255,136,.12);border:1px solid var(--call);color:var(--call);}
+.toast.put {background:rgba(255,34,85,.12); border:1px solid var(--put); color:var(--put);}
+.toast.info{background:rgba(0,212,255,.12); border:1px solid var(--accent);color:var(--accent);}
+.toast.err {background:rgba(255,34,85,.12); border:1px solid var(--put);color:var(--put);}
+
+@media(max-width:480px){
+  .logo{font-size:1.4rem;}
+  .stats{grid-template-columns:repeat(2,1fr);}
+  .row2{flex-direction:column;}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- HEADER -->
+  <div class="hdr">
+    <div class="logo">UMARR<span> BOT</span></div>
+    <div class="sub"><span class="live-dot" id="dot"></span>LIVE SIGNAL ANALYZER</div>
+  </div>
+
+  <!-- SETUP CARD -->
+  <div class="card">
+    <div class="row2">
+      <div class="field">
+        <span class="lbl">Asset</span>
+        <select id="asset">
+          <optgroup label="── Forex ──">
+            <option value="forex_EURUSD">EUR/USD</option>
+            <option value="forex_GBPUSD">GBP/USD</option>
+            <option value="forex_USDJPY">USD/JPY</option>
+            <option value="forex_AUDUSD">AUD/USD</option>
+            <option value="forex_USDCAD">USD/CAD</option>
+          </optgroup>
+          <optgroup label="── Crypto ──">
+            <option value="crypto_bitcoin">BTC/USD</option>
+            <option value="crypto_ethereum">ETH/USD</option>
+            <option value="crypto_binancecoin">BNB/USD</option>
+            <option value="crypto_ripple">XRP/USD</option>
+          </optgroup>
+        </select>
+      </div>
+      <div class="field">
+        <span class="lbl">Expiry</span>
+        <select id="expiry">
+          <option value="1">1 Minute</option>
+          <option value="3">3 Minutes</option>
+          <option value="5" selected>5 Minutes</option>
+          <option value="10">10 Minutes</option>
+          <option value="15">15 Minutes</option>
+        </select>
+      </div>
+    </div>
+
+    <button class="btn" id="btn" onclick="getSignal()">⚡ GET LIVE SIGNAL</button>
+
+    <!-- live price strip -->
+    <div class="pstrip" id="pstrip">
+      <div>
+        <div class="ps-lbl">LIVE PRICE</div>
+        <div class="ps-val" id="psVal">—</div>
+      </div>
+      <div class="ps-chg" id="psChg"></div>
+    </div>
+  </div>
+
+  <!-- SIGNAL CARD -->
+  <div class="card">
+
+    <!-- idle -->
+    <div class="state" id="sIdle">
+      <div class="idle-ring"></div>
+      <div style="font-size:2.2rem;margin-bottom:10px">📈</div>
+      <div style="color:var(--dim);font-size:.8rem;line-height:1.9">Asset choose karo<br>aur GET LIVE SIGNAL dabao</div>
+    </div>
+
+    <!-- loading -->
+    <div class="state" id="sLoad" style="display:none">
+      <div class="spin"></div>
+      <div style="color:var(--dim);font-size:.78rem;margin-top:14px">Live price aa rahi hai...</div>
+    </div>
+
+    <!-- result -->
+    <div id="sResult" style="display:none">
+      <div class="sig-box" id="sigBox">
+        <div class="arrow" id="sigArrow"></div>
+        <div class="sname" id="sigName"></div>
+        <div class="sdesc" id="sigDesc"></div>
+        <div class="cbar-wrap"><div class="cbar" id="cbar" style="width:0%"></div></div>
+        <div class="ctxt"  id="ctxt"></div>
+      </div>
+      <div class="itbl">
+        <div class="irow"><span class="ik">Asset</span>  <span class="iv" id="iA">—</span></div>
+        <div class="irow"><span class="ik">Price</span>  <span class="iv" id="iP">—</span></div>
+        <div class="irow"><span class="ik">Change</span> <span class="iv" id="iC">—</span></div>
+        <div class="irow"><span class="ik">Signal</span> <span class="iv" id="iS">—</span></div>
+        <div class="irow"><span class="ik">Expiry</span> <span class="iv" id="iE">—</span></div>
+        <div class="irow"><span class="ik">Time</span>   <span class="iv" id="iT">—</span></div>
+      </div>
+      <div class="reasons" id="reasons"></div>
+      <div class="tbrow">
+        <button class="tc" onclick="placeTrade('CALL')">▲ CALL / BUY</button>
+        <button class="tp" onclick="placeTrade('PUT')">▼ PUT / SELL</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- HISTORY CARD -->
+  <div class="card">
+    <div style="font-family:'Orbitron',monospace;font-size:.78rem;letter-spacing:2px;color:var(--accent);margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--border)">📋 HISTORY</div>
+    <div id="histList"><div class="no-h">Koi signal nahi abhi...</div></div>
+    <button class="btn-clr" onclick="clearHist()">🗑 Clear</button>
+  </div>
+
+  <!-- STATS -->
+  <div class="stats">
+    <div class="stat"><span class="sn" id="sTot">0</span><span class="sl">Total</span></div>
+    <div class="stat"><span class="sn cc" id="sC">0</span><span class="sl">CALL ▲</span></div>
+    <div class="stat"><span class="sn pc" id="sP">0</span><span class="sl">PUT ▼</span></div>
+    <div class="stat"><span class="sn nc" id="sN">0</span><span class="sl">NEUTRAL</span></div>
+  </div>
+
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+// ============================================
+//  QUOTEX LIVE SIGNAL BOT
+//  APIs:
+//  - Crypto  → CoinGecko (free, no key)
+//  - Forex   → exchangerate.host (free, no key)
+// ============================================
+
+let hist  = JSON.parse(localStorage.getItem('qx_h') || '[]');
+let stats = JSON.parse(localStorage.getItem('qx_s') || '{"t":0,"c":0,"p":0,"n":0}');
+let prevPrices = {};
+
+window.onload = () => { renderHist(); renderStats(); };
+
+// ============================================
+//  MAIN: GET SIGNAL
+// ============================================
+async function getSignal() {
+  const assetVal = document.getElementById('asset').value;
+  const expiry   = parseInt(document.getElementById('expiry').value);
+  const btn      = document.getElementById('btn');
+
+  btn.disabled    = true;
+  btn.textContent = '⏳ Fetching...';
+  setState('load');
+  setDot(false);
+
+  try {
+    const [type, id] = assetVal.split('_');
+    let data;
+
+    if (type === 'crypto') {
+      data = await fetchCrypto(id);
+    } else {
+      data = await fetchForex(id);
+    }
+
+    const result = analyze(data, assetVal, expiry);
+    showResult(result);
+    addHist(result);
+    updStats(result.signal);
+    setDot(true);
+    showToast('✅ Signal ready!', 'info');
+
+  } catch(e) {
+    setState('idle');
+    setDot(false);
+    showToast('❌ ' + e.message, 'err');
+    console.error(e);
+  }
+
+  btn.disabled    = false;
+  btn.textContent = '⚡ GET LIVE SIGNAL';
+}
+
+// ============================================
+//  CRYPTO PRICE — CoinGecko Free API
+// ============================================
+async function fetchCrypto(coinId) {
+  const url = `https://api.coingecko.com/api/v3/simple/price?ids=${coinId}&vs_currencies=usd&include_24hr_change=true&include_24hr_vol=true`;
+  const res  = await fetch(url);
+  if (!res.ok) throw new Error('CoinGecko API error');
+  const json = await res.json();
+  const coin = json[coinId];
+  if (!coin) throw new Error('Coin data nahi mila');
+
+  const price     = coin.usd;
+  const changePct = +(coin.usd_24h_change || 0).toFixed(3);
+  const prev      = prevPrices[coinId] || price;
+  prevPrices[coinId] = price;
+
+  return {
+    price,
+    prevPrice:  prev,
+    changePct,
+    change:     +(price - prev).toFixed(6),
+    vol:        coin.usd_24h_vol || 0,
+    name:       coinId.toUpperCase().replace('BINANCECOIN','BNB').replace('BITCOIN','BTC').replace('ETHEREUM','ETH').replace('RIPPLE','XRP') + '/USD'
+  };
+}
+
+// ============================================
+//  FOREX PRICE — exchangerate.host Free API
+// ============================================
+async function fetchForex(pair) {
+  // pair = "EURUSD" → base=EUR, target=USD
+  const base   = pair.slice(0, 3);
+  const target = pair.slice(3, 6);
+
+  const url  = `https://api.exchangerate.host/live?access_key=&source=${base}&currencies=${target}`;
+  // fallback: use open.er-api.com
+  const url2 = `https://open.er-api.com/v6/latest/${base}`;
+
+  let price, prev;
+
+  try {
+    const res  = await fetch(url2);
+    if (!res.ok) throw new Error('ER API error');
+    const json = await res.json();
+    price = json.rates?.[target];
+    if (!price) throw new Error('Rate nahi mila');
+  } catch {
+    // second fallback: frankfurter.app
+    const url3 = `https://api.frankfurter.app/latest?from=${base}&to=${target}`;
+    const res3 = await fetch(url3);
+    if (!res3.ok) throw new Error('Forex data fetch failed. Internet check karo.');
+    const j3 = await res3.json();
+    price = j3.rates?.[target];
+    if (!price) throw new Error('Forex rate nahi mila');
+  }
+
+  price = +price.toFixed(5);
+  prev  = prevPrices[pair] || price;
+  prevPrices[pair] = price;
+
+  const change    = +(price - prev).toFixed(5);
+  const changePct = prev ? +((change / prev) * 100).toFixed(4) : 0;
+
+  return {
+    price,
+    prevPrice: prev,
+    change,
+    changePct,
+    vol:  0,
+    name: base + '/' + target
+  };
+}
+
+// ============================================
+//  SIGNAL ANALYZER
+// ============================================
+function analyze(data, assetVal, expiry) {
+  const { price, prevPrice, change, changePct, vol, name } = data;
+
+  let score   = 0;
+  let reasons = [];
+
+  // 1. Price momentum
+  if (change > 0) {
+    score += 2;
+    reasons.push(`Price upar gaya ↑  (+${Math.abs(change)}) — bullish pressure`);
+  } else if (change < 0) {
+    score -= 2;
+    reasons.push(`Price neeche aaya ↓  (${change}) — bearish pressure`);
+  } else {
+    reasons.push('Price same hai — market flat');
+  }
+
+  // 2. Change % strength
+  const absPct = Math.abs(changePct);
+  if (absPct > 0.1) {
+    score += change > 0 ? 1.5 : -1.5;
+    reasons.push(`Strong move: ${changePct > 0 ? '+' : ''}${changePct}% — momentum confirm`);
+  } else if (absPct > 0.02) {
+    score += change > 0 ? 0.5 : -0.5;
+    reasons.push(`Moderate move: ${changePct}%`);
+  } else {
+    reasons.push(`Weak move: ${changePct}% — low volatility`);
+  }
+
+  // 3. Price decimal last digit pattern
+  const priceStr  = price.toFixed(5);
+  const lastDigit = parseInt(priceStr[priceStr.length - 1]);
+  if (lastDigit <= 2) {
+    score += 0.5;
+    reasons.push(`Last digit ${lastDigit} — low zone, bounce chance ↑`);
+  } else if (lastDigit >= 8) {
+    score -= 0.5;
+    reasons.push(`Last digit ${lastDigit} — high zone, reversal chance ↓`);
+  }
+
+  // 4. Expiry factor
+  if (expiry >= 5) {
+    score *= 1.15;
+    reasons.push(`${expiry} min expiry — acha signal window ✅`);
+  } else {
+    reasons.push(`${expiry} min expiry — short trade, risk zyada ⚠`);
+  }
+
+  // 5. Time session
+  const h = new Date().getUTCHours();
+  if ((h >= 7 && h < 17) || (h >= 12 && h < 21)) {
+    reasons.push('Active trading session — signal reliable ✅');
+    score *= 1.1;
+  } else {
+    reasons.push('Off-hours session — signal weak ho sakta ⚠');
+  }
+
+  // 6. 24h vol (crypto only)
+  if (vol > 1e9) {
+    reasons.push(`High 24h volume ($${(vol/1e9).toFixed(1)}B) — strong market ✅`);
+    score *= 1.05;
+  }
+
+  const s = Math.round(score * 10) / 10;
+  let signal, confidence;
+
+  if      (s >= 3)  { signal='CALL'; confidence = Math.min(93, 65 + s*5); }
+  else if (s <= -3) { signal='PUT';  confidence = Math.min(93, 65 + Math.abs(s)*5); }
+  else if (s >= 1)  { signal='CALL'; confidence = 50 + s*7; }
+  else if (s <= -1) { signal='PUT';  confidence = 50 + Math.abs(s)*7; }
+  else              { signal='NEUTRAL'; confidence = 50; reasons.push('Conflicting signals — wait karo ⏳'); }
+
+  return {
+    signal,
+    confidence: Math.round(Math.min(93, Math.max(40, confidence))),
+    name, price: priceStr,
+    change: change > 0 ? '+'+change : ''+change,
+    changePct: changePct > 0 ? '+'+changePct+'%' : changePct+'%',
+    expiry, reasons,
+    time: new Date().toLocaleTimeString('en-US', {hour12:true})
+  };
+}
+
+// ============================================
+//  SHOW RESULT
+// ============================================
+function showResult(r) {
+  setState('result');
+
+  const isCall = r.signal==='CALL', isPut = r.signal==='PUT';
+  const cls    = isCall ? 'call' : isPut ? 'put' : 'neu';
+  const arrow  = isCall ? '▲' : isPut ? '▼' : '◆';
+  const desc   = isCall ? 'MARKET UPAR JAYEGI ↑'
+               : isPut  ? 'MARKET NEECHE JAYEGI ↓'
+               :          'WAIT — CLEAR SIGNAL NAHI';
+
+  const box = document.getElementById('sigBox');
+  box.className = 'sig-box ' + cls;
+  document.getElementById('sigArrow').textContent = arrow;
+  document.getElementById('sigName').textContent  = r.signal;
+  document.getElementById('sigDesc').textContent  = desc;
+  document.getElementById('ctxt').textContent     = `CONFIDENCE: ${r.confidence}%`;
+
+  const bar = document.getElementById('cbar');
+  bar.style.width = '0%';
+  setTimeout(() => bar.style.width = r.confidence + '%', 80);
+
+  document.getElementById('iA').textContent = r.name;
+  document.getElementById('iP').textContent = r.price;
+  document.getElementById('iC').innerHTML   = `<span class="${parseFloat(r.change)>=0?'up':'dn'}">${r.change} (${r.changePct})</span>`;
+  document.getElementById('iS').innerHTML   = `<span class="${cls==='neu'?'nc':cls==='call'?'cc':'pc'}">${r.signal}</span>`;
+  document.getElementById('iE').textContent = r.expiry + ' min';
+  document.getElementById('iT').textContent = r.time;
+
+  document.getElementById('reasons').innerHTML =
+    '<strong style="color:var(--accent)">📊 Analysis:</strong><br>' +
+    r.reasons.map(x => '• ' + x).join('<br>');
+
+  // price strip
+  const ps = document.getElementById('pstrip');
+  ps.style.display = 'flex';
+  document.getElementById('psVal').textContent = r.price;
+  const chgEl = document.getElementById('psChg');
+  chgEl.innerHTML  = `${r.change} (${r.changePct})`;
+  chgEl.className  = 'ps-chg ' + (parseFloat(r.change) >= 0 ? 'up' : 'dn');
+}
+
+// helpers
+function setState(s) {
+  document.getElementById('sIdle').style.display   = s==='idle'  ?'flex':'none';
+  document.getElementById('sLoad').style.display   = s==='load'  ?'flex':'none';
+  document.getElementById('sResult').style.display = s==='result'?'block':'none';
+}
+function setDot(on) {
+  document.getElementById('dot').className = 'live-dot' + (on?' on':'');
+}
+
+function placeTrade(t) {
+  showToast(`✅ ${t} placed — ${document.getElementById('iA').textContent}`, t.toLowerCase());
+}
+
+// history
+function addHist(r) {
+  hist.unshift({asset:r.name, signal:r.signal, confidence:r.confidence, time:r.time});
+  if (hist.length > 30) hist = hist.slice(0,30);
+  localStorage.setItem('qx_h', JSON.stringify(hist));
+  renderHist();
+}
+function renderHist() {
+  const el = document.getElementById('histList');
+  if (!hist.length) { el.innerHTML='<div class="no-h">Koi signal nahi abhi...</div>'; return; }
+  const cls = s => s==='CALL'?'call':s==='PUT'?'put':'neu';
+  el.innerHTML = hist.map(h=>`
+    <div class="hi ${cls(h.signal)}">
+      <div class="ha">${h.asset}</div>
+      <div class="hs ${cls(h.signal)}">${h.signal} — ${h.confidence}%</div>
+      <div class="ht">${h.time}</div>
+    </div>`).join('');
+}
+function clearHist() {
+  hist=[]; localStorage.removeItem('qx_h'); renderHist();
+}
+
+// stats
+function updStats(sig) {
+  stats.t++; if(sig==='CALL')stats.c++; else if(sig==='PUT')stats.p++; else stats.n++;
+  localStorage.setItem('qx_s', JSON.stringify(stats));
+  renderStats();
+}
+function renderStats() {
+  document.getElementById('sTot').textContent = stats.t;
+  document.getElementById('sC').textContent   = stats.c;
+  document.getElementById('sP').textContent   = stats.p;
+  document.getElementById('sN').textContent   = stats.n;
+}
+
+// toast
+function showToast(msg, type='info') {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.className = `toast ${type} show`;
+  setTimeout(() => el.className='toast', 3000);
+}
+</script>
+</body>
+</html>
